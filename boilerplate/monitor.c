@@ -1,10 +1,3 @@
-#include <linux/module.h>
-#include <linux/kernel.h>
-
-#include <linux/init.h>
-#include <linux/timer.h>
-#include <linux/jiffies.h>
-
 #include <linux/cdev.h>
 #include <linux/device.h>
 #include <linux/fs.h>
@@ -63,11 +56,11 @@ static long get_rss_bytes(pid_t pid)
 
     mm = get_task_mm(task);
     if (mm) {
-	rss_pages = get_mm_rss(mm);
+        rss_pages = get_mm_rss(mm);
         mmput(mm);
     }
-    put_task_struct(task);
 
+    put_task_struct(task);
     return rss_pages * PAGE_SIZE;
 }
 
@@ -110,17 +103,14 @@ static void timer_callback(struct timer_list *t)
     mutex_lock(&monitored_lock);
 
     list_for_each_entry_safe(entry, tmp, &monitored_list, list) {
-
         long rss = get_rss_bytes(entry->pid);
 
-        /* remove dead process */
         if (rss < 0) {
             list_del(&entry->list);
             kfree(entry);
             continue;
         }
 
-        /* soft limit */
         if (!entry->soft_triggered && rss > entry->soft_limit) {
             log_soft_limit_event(entry->container_id,
                                  entry->pid,
@@ -129,7 +119,6 @@ static void timer_callback(struct timer_list *t)
             entry->soft_triggered = 1;
         }
 
-        /* hard limit */
         if (rss > entry->hard_limit) {
             kill_process(entry->container_id,
                          entry->pid,
@@ -153,8 +142,6 @@ static long monitor_ioctl(struct file *f, unsigned int cmd, unsigned long arg)
     struct monitor_request req;
     struct monitored_entry *entry, *tmp;
 
-    (void)f;
-
     if (copy_from_user(&req,
         (struct monitor_request __user *)arg,
         sizeof(req)))
@@ -167,11 +154,13 @@ static long monitor_ioctl(struct file *f, unsigned int cmd, unsigned long arg)
             return -ENOMEM;
 
         entry->pid = req.pid;
-        entry->soft_limit = req.soft_limit_bytes;
-        entry->hard_limit = req.hard_limit_bytes;
-        entry->soft_triggered = 0;
-        strncpy(entry->container_id, req.container_id,
-                sizeof(entry->container_id)-1);
+entry->soft_limit = 1 * 1024 * 1024;   // 1 MB
+entry->hard_limit = 2 * 1024 * 1024;   // 2 MB        entry->soft_triggered = 0;
+
+        strncpy(entry->container_id,
+                req.container_id,
+                sizeof(entry->container_id) - 1);
+        entry->container_id[31] = '\0';
 
         mutex_lock(&monitored_lock);
         list_add(&entry->list, &monitored_list);
@@ -223,9 +212,6 @@ static int __init monitor_init(void)
 #else
     cl = class_create(THIS_MODULE, DEVICE_NAME);
 #endif
-
-    if (IS_ERR(cl))
-        return PTR_ERR(cl);
 
     device_create(cl, NULL, dev_num, NULL, DEVICE_NAME);
 
