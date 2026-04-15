@@ -1,18 +1,3 @@
-/*
- * memory_hog.c - Memory pressure workload for soft / hard limit testing.
- *
- * Default behavior:
- *   - allocate 8 MiB every second
- *   - touch each page so RSS actually grows
- *
- * Usage:
- *   /memory_hog [chunk_mb] [sleep_ms]
- *
- * If you plan to copy this binary into an Alpine rootfs, build it in a way
- * that is runnable inside that filesystem, such as static linking or
- * rebuilding it from inside the rootfs/toolchain you choose.
- */
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -35,15 +20,19 @@ static useconds_t parse_sleep_ms(const char *arg, useconds_t fallback)
 
     if (!arg || *arg == '\0' || (end && *end != '\0'))
         return fallback;
-    return (useconds_t)(value * 1000U);
+
+    return (useconds_t)(value * 1000);
 }
 
 int main(int argc, char *argv[])
 {
-    const size_t chunk_mb = (argc > 1) ? parse_size_mb(argv[1], 8) : 8;
-    const useconds_t sleep_us = (argc > 2) ? parse_sleep_ms(argv[2], 1000U) : 1000U * 1000U;
-    const size_t chunk_bytes = chunk_mb * 1024U * 1024U;
+    size_t chunk_mb = (argc > 1) ? parse_size_mb(argv[1], 10) : 10;
+    useconds_t sleep_us = (argc > 2) ? parse_sleep_ms(argv[2], 500) : 500000;
+
+    size_t chunk_bytes = chunk_mb * 1024 * 1024;
     int count = 0;
+
+    printf("Memory hog starting...\n");
 
     while (1) {
         char *mem = malloc(chunk_bytes);
@@ -53,9 +42,11 @@ int main(int argc, char *argv[])
         }
 
         memset(mem, 'A', chunk_bytes);
+
         count++;
         printf("allocation=%d chunk=%zuMB total=%zuMB\n",
                count, chunk_mb, (size_t)count * chunk_mb);
+
         fflush(stdout);
         usleep(sleep_us);
     }
